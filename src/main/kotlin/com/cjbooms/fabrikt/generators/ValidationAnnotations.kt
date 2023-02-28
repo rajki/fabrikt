@@ -13,7 +13,7 @@ object ValidationAnnotations {
     private val decimalMinClass = ClassName("javax.validation.constraints", "DecimalMin")
     private val decimalMaxClass = ClassName("javax.validation.constraints", "DecimalMax")
 
-    val NON_NULL_ANNOTATION = AnnotationSpec
+    fun notNull() = AnnotationSpec
         .builder(notNullClass)
         .useSiteTarget(AnnotationSpec.UseSiteTarget.GET)
         .build()

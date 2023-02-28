@@ -149,7 +149,7 @@ object PropertyUtils {
      *   enum                   - Not currently supported. Possible to do as a regex maybe.
      */
     private fun PropertySpec.Builder.addValidationAnnotations(info: PropertyInfo) {
-        if (!info.isNullable()) addAnnotation(ValidationAnnotations.NON_NULL_ANNOTATION)
+        if (!info.isNullable()) addAnnotation(ValidationAnnotations.notNull())
         when (info) {
             is PropertyInfo.Field -> {
                 // Regex validation pattern to validate string input
