@@ -8,8 +8,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
-import com.reprezen.kaizen.oasparser.OpenApi3Parser
-import com.reprezen.kaizen.oasparser.model3.OpenApi3
+import io.swagger.parser.OpenAPIParser
+import io.swagger.v3.oas.models.OpenAPI
+import io.swagger.v3.parser.core.models.ParseOptions
 import java.nio.file.Path
 import java.nio.file.Paths
 
@@ -26,6 +27,8 @@ object YamlUtils {
     private val internalMapper: ObjectMapper =
         ObjectMapper(YAMLFactory().disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER))
 
+    private val parser = OpenAPIParser()
+    private val parseOptions = ParseOptions()
     fun mergeYamlTrees(mainTree: String, updateTree: String) =
         internalMapper.writeValueAsString(
             mergeNodes(
@@ -34,9 +37,14 @@ object YamlUtils {
             )
         )!!
 
-    fun parseOpenApi(input: String, inputDir: Path = Paths.get("").toAbsolutePath()): OpenApi3 =
+    init {
+        parseOptions.isResolve = true
+    }
+
+    fun parseOpenApi(input: String, inputDir: Path = Paths.get("").toAbsolutePath()): OpenAPI =
         try {
-            OpenApi3Parser().parse(input, inputDir.toUri().toURL())
+            val parseResult = parser.readContents(input, null, parseOptions)
+            parseResult.openAPI
         } catch (ex: NullPointerException) {
             throw IllegalArgumentException(
                 "The Kaizen openapi-parser library threw a NPE exception when parsing this API. " +

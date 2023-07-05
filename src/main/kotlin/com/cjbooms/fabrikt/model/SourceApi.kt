@@ -6,11 +6,13 @@ import com.cjbooms.fabrikt.util.YamlUtils
 import com.cjbooms.fabrikt.validation.ValidationError
 import com.reprezen.kaizen.oasparser.model3.OpenApi3
 import com.reprezen.kaizen.oasparser.model3.Schema
+import io.swagger.v3.oas.models.OpenAPI
+import io.swagger.v3.oas.models.media.Schema
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.logging.Logger
 
-data class SchemaInfo(val name: String, val schema: Schema) {
+data class SchemaInfo(val name: String, val schema: Schema<Any>) {
     val typeInfo: KotlinTypeInfo = KotlinTypeInfo.from(schema, name)
 }
 
@@ -32,28 +34,22 @@ data class SourceApi(
         }
     }
 
-    val openApi3: OpenApi3 = YamlUtils.parseOpenApi(rawApiSpec, baseDir)
+    val openApi3: OpenAPI = YamlUtils.parseOpenApi(rawApiSpec, baseDir)
     val allSchemas: List<SchemaInfo>
 
     init {
         validateSchemaObjects(openApi3).let {
             if (it.isNotEmpty()) throw ParameterException("Invalid models or api file:\n${it.joinToString("\n\t")}")
         }
-        allSchemas = openApi3.schemas.entries.map { it.key to it.value }
-            .plus(openApi3.parameters.entries.map { it.key to it.value.schema })
-            .plus(openApi3.responses.entries.flatMap { it.value.contentMediaTypes.entries.map { content -> it.key to content.value.schema } })
+        allSchemas = openApi3.components.schemas.entries.map { it.key to it.value }
             .map { (key, schema) -> SchemaInfo(key, schema) }
     }
 
-    private fun validateSchemaObjects(api: OpenApi3): List<ValidationError> {
-        val schemaErrors = api.schemas.entries.fold(emptyList<ValidationError>()) { errors, entry ->
+    private fun validateSchemaObjects(api: OpenAPI): List<ValidationError> {
+        val schemaErrors = api.components.schemas.entries.fold(emptyList<ValidationError>()) { errors, entry ->
             val name = entry.key
             val schema = entry.value
-            if (schema.type == OasType.Object.type && (
-                schema.oneOfSchemas?.isNotEmpty() == true ||
-                    schema.allOfSchemas?.isNotEmpty() == true ||
-                    schema.anyOfSchemas?.isNotEmpty() == true
-                )
+            if (schema.type == OasType.Object.type && (schema.oneOf.isNotEmpty() || schema.allOf.isNotEmpty() || schema.anyOf.isNotEmpty())
             )
                 errors + listOf(
                     ValidationError(

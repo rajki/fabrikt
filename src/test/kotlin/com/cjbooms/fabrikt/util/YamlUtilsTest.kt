@@ -66,6 +66,6 @@ class YamlUtilsTest {
 
         val api = YamlUtils.parseOpenApi(encodingInput)
 
-        assertThat(api.isValid).isEqualTo(true)
+        assertThat(api.info.version).isEqualTo("1.0")
     }
 }
