@@ -8,12 +8,6 @@ import com.cjbooms.fabrikt.model.RequestParameter
 import com.cjbooms.fabrikt.util.KaizenParserExtensions.safeName
 import com.cjbooms.fabrikt.util.NormalisedString.camelCase
 import com.cjbooms.fabrikt.util.NormalisedString.toKotlinParameterName
-import com.reprezen.kaizen.oasparser.model3.MediaType
-import com.reprezen.kaizen.oasparser.model3.Operation
-import com.reprezen.kaizen.oasparser.model3.Parameter
-import com.reprezen.kaizen.oasparser.model3.RequestBody
-import com.reprezen.kaizen.oasparser.model3.Response
-import com.reprezen.kaizen.oasparser.model3.Schema
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.CodeBlock
 import com.squareup.kotlinpoet.FunSpec
@@ -23,9 +17,16 @@ import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.asTypeName
 import com.cjbooms.fabrikt.util.capitalized
 import com.cjbooms.fabrikt.util.decapitalized
+import io.swagger.v3.oas.models.Operation
+import io.swagger.v3.oas.models.media.MediaType
+import io.swagger.v3.oas.models.media.Schema
+import io.swagger.v3.oas.models.parameters.Parameter
+import io.swagger.v3.oas.models.parameters.RequestBody
+import io.swagger.v3.oas.models.responses.ApiResponse
 import java.util.function.Predicate
 
 object GeneratorUtils {
+
     /**
      * It resolves the API operation body request to its body type. If multiple content medias are found, then it will
      * resolve to the schema reference of the first media type, otherwise it assumes no request body defined for
@@ -36,7 +37,7 @@ object GeneratorUtils {
             val modelType = toModelType(
                 basePackage = basePackage,
                 typeInfo = KotlinTypeInfo.from(it),
-                isNullable = !this.isRequired
+                isNullable = !this.required
             )
             ParameterSpec.builder(
                 it.toVarName(),
@@ -53,7 +54,7 @@ object GeneratorUtils {
             toModelType(
                 basePackage = basePackage,
                 typeInfo = KotlinTypeInfo.from(this.schema),
-                isNullable = !this.isRequired && this.schema.default == null
+                isNullable = !this.required && this.schema.default == null
             )
         ).build()
 
@@ -70,12 +71,12 @@ object GeneratorUtils {
             .decapitalized()
     }
 
+
     /**
      * It resolves the schema for the given API operation. If multiple content medias are found, then it will
      * resolve to the schema reference of the first media type.
      */
-    fun RequestBody.toBodyRequestSchema(): List<Schema> =
-        listOfNotNull(this.getPrimaryContentMediaType()?.value?.schema)
+    fun RequestBody.toBodyRequestSchema(): List<Schema<*>> = listOfNotNull(this.getPrimaryContentMediaType()?.value?.schema)
 
     fun mergeParameters(path: List<Parameter>, operation: List<Parameter>): List<Parameter> =
         path.filter { pp -> !operation.any { op -> pp.name == op.name && pp.`in` == op.`in` } } + operation
@@ -108,21 +109,21 @@ object GeneratorUtils {
 
     fun functionName(op: Operation, resource: String, verb: String) = op.operationId?.camelCase() ?: "$verb $resource".toKCodeName()
 
-    fun Schema.toVarName() = this.name?.toKCodeName() ?: this.toClassName().simpleName.toKCodeName()
+    fun Schema<*>.toVarName() = this.name?.toKCodeName() ?: this.toClassName().simpleName.toKCodeName()
 
-    private fun Schema.toClassName() = KotlinTypeInfo.from(this).modelKClass.asTypeName()
+    private fun Schema<*>.toClassName() = KotlinTypeInfo.from(this).modelKClass.asTypeName()
 
     fun String.toClassName(basePackage: String) = ClassName(packageName = basePackage, this)
 
     fun RequestBody.getPrimaryContentMediaType(): Map.Entry<String, MediaType>? =
-        this.contentMediaTypes.entries.firstOrNull()
+        this.content.entries.firstOrNull()
 
-    fun Response.getPrimaryContentMediaType(): Map.Entry<String, MediaType>? =
-        this.contentMediaTypes.entries.firstOrNull()
+    fun ApiResponse.getPrimaryContentMediaType(): Map.Entry<String, MediaType>? =
+        this.content.entries.firstOrNull()
 
-    fun Response.hasMultipleContentMediaTypes(): Boolean = this.contentMediaTypes.entries.size > 1
+    fun ApiResponse.hasMultipleContentMediaTypes(): Boolean = this.content.entries.size > 1
 
-    fun Operation.firstResponse(): Response? = this.getBodyResponses().firstOrNull()
+    fun Operation.firstResponse(): ApiResponse? = this.getBodyResponses().firstOrNull()
 
     fun Operation.getPrimaryContentMediaType(): Map.Entry<String, MediaType>? {
         val responses = getBodySuccessResponses().ifEmpty { getBodyResponses() }
@@ -134,7 +135,7 @@ object GeneratorUtils {
     fun Operation.hasMultipleContentMediaTypes(): Boolean? = this.firstResponse()?.hasMultipleContentMediaTypes()
 
     fun Operation.hasMultipleSuccessResponseSchemas(): Boolean =
-            getBodySuccessResponses().flatMap { it.contentMediaTypes.values }.map { it.schema.name }.distinct().size > 1
+            getBodySuccessResponses().flatMap { it.content.values }.map { it.schema.name }.distinct().size > 1
 
     fun Operation.getPathParams(): List<Parameter> = this.filterParams("path")
 
@@ -142,13 +143,13 @@ object GeneratorUtils {
 
     fun Operation.getHeaderParams(): List<Parameter> = this.filterParams("header")
 
-    private fun Operation.getBodyResponses(): List<Response> =
-        this.responses.filter { it.key != "default" }.values.filter(Response::hasContentMediaTypes)
+    private fun Operation.getBodyResponses(): List<ApiResponse> =
+        this.responses.filter { it.key != "default" }.values.filter { it.content.size > 0 }
 
-    private fun Operation.getBodySuccessResponses(): List<Response> =
-        getSuccessResponses().values.filter(Response::hasContentMediaTypes)
+    private fun Operation.getBodySuccessResponses(): List<ApiResponse> =
+        getSuccessResponses().values.filter { it.content.size > 0 }
 
-    private fun Operation.getSuccessResponses(): Map<String, Response> =
+    private fun Operation.getSuccessResponses(): Map<String, ApiResponse> =
         this.responses.filter { it.key.toIntOrNull()?.let { status -> status in 200..399 } ?: false }
 
     private fun Operation.filterParams(paramType: String): List<Parameter> = this.parameters.filter { it.`in` == paramType }
@@ -164,7 +165,7 @@ object GeneratorUtils {
         extraParameters: List<IncomingParameter>,
     ): List<IncomingParameter> {
 
-        val bodies = requestBody.contentMediaTypes.values
+        val bodies = requestBody.content.values
             .map {
                 BodyParameter(
                     it.schema.safeName().toKotlinParameterName().ifEmpty { it.schema.toVarName() },
@@ -218,5 +219,5 @@ object GeneratorUtils {
         }
     }
 
-    private fun isNullable(parameter: Parameter): Boolean = !parameter.isRequired && parameter.schema.default == null
+    private fun isNullable(parameter: Parameter): Boolean = !parameter.required && parameter.schema.default == null
 }

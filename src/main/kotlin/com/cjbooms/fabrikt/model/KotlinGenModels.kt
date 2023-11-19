@@ -5,14 +5,14 @@ import com.cjbooms.fabrikt.model.Destinations.clientPackage
 import com.cjbooms.fabrikt.model.Destinations.controllersPackage
 import com.cjbooms.fabrikt.model.Destinations.modelsPackage
 import com.cjbooms.fabrikt.util.NormalisedString.toKotlinParameterName
-import com.reprezen.kaizen.oasparser.model3.Parameter
-import com.reprezen.kaizen.oasparser.model3.Schema
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.FileSpec
 import com.squareup.kotlinpoet.KModifier
 import com.squareup.kotlinpoet.ParameterSpec
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
+import io.swagger.v3.oas.models.media.Schema
+import io.swagger.v3.oas.models.parameters.Parameter
 
 sealed class GeneratedType(val spec: TypeSpec, val destinationPackage: String) {
     val className = ClassName(destinationPackage, spec.name!!)
@@ -86,7 +86,7 @@ sealed class IncomingParameter(val oasName: String, val description: String?, va
         ParameterSpec.builder(name, type)
 }
 
-class BodyParameter(oasName: String, description: String?, type: TypeName, val schema: Schema) :
+class BodyParameter(oasName: String, description: String?, type: TypeName, val schema: Schema<*>) :
     IncomingParameter(oasName, description, type)
 
 class RequestParameter(
@@ -111,7 +111,7 @@ class RequestParameter(
         minimum = parameter.schema.minimum,
         maximum = parameter.schema.maximum,
         parameterLocation = RequestParameterLocation(parameter.`in`),
-        isRequired = parameter.isRequired,
+        isRequired = parameter.required,
         explode = parameter.explode,
         defaultValue = parameter.schema.default
     )
