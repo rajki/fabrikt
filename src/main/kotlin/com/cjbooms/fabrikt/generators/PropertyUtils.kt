@@ -1,5 +1,6 @@
 package com.cjbooms.fabrikt.generators
 
+import com.cjbooms.fabrikt.generators.PropertyUtils.isNullable
 import com.cjbooms.fabrikt.generators.model.JacksonMetadata
 import com.cjbooms.fabrikt.model.KotlinTypeInfo
 import com.cjbooms.fabrikt.model.PropertyInfo
@@ -39,7 +40,7 @@ object PropertyUtils {
                 ClassName(
                     "org.openapitools.jackson.nullable",
                     "JsonNullable",
-                ).parameterizedBy(type.copy(nullable = this.schema.isNullable))
+                ).parameterizedBy(type.copy(nullable = this.schema.nullable))
             } else {
                 type
             }
