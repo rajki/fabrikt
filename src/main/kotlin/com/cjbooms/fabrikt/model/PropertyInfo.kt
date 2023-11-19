@@ -15,12 +15,12 @@ import com.cjbooms.fabrikt.util.KaizenParserExtensions.safeName
 import com.cjbooms.fabrikt.util.KaizenParserExtensions.safeType
 import com.cjbooms.fabrikt.util.NormalisedString.camelCase
 import com.cjbooms.fabrikt.util.NormalisedString.toEnumName
-import com.reprezen.kaizen.oasparser.model3.Schema
+import io.swagger.v3.oas.models.media.Schema
 
 sealed class PropertyInfo {
     abstract val oasKey: String
     abstract val typeInfo: KotlinTypeInfo
-    abstract val schema: Schema
+    abstract val schema: Schema<*>
     open val isRequired: Boolean = false
     open val isInherited: Boolean = false
 
@@ -38,7 +38,7 @@ sealed class PropertyInfo {
 
         val HTTP_SETTINGS = Settings()
 
-        fun Schema.topLevelProperties(settings: Settings, enclosingSchema: Schema? = null): Collection<PropertyInfo> {
+        fun Schema.topLevelProperties(settings: Settings, enclosingSchema: Schema<*>? = null): Collection<PropertyInfo> {
             val results = mutableListOf<PropertyInfo>() +
                 allOfSchemas.flatMap {
                     it.topLevelProperties(
@@ -56,7 +56,7 @@ sealed class PropertyInfo {
             return results.distinctBy { it.oasKey }
         }
 
-        private fun maybeMarkInherited(settings: Settings, enclosingSchema: Schema?, it: Schema): Settings {
+        private fun maybeMarkInherited(settings: Settings, enclosingSchema: Schema<*>?, it: Schema<*>): Settings {
             val isInherited = when {
                 it.safeName() == enclosingSchema?.name -> false
                 it.hasNoDiscriminator() -> settings.markAsInherited
@@ -66,9 +66,9 @@ sealed class PropertyInfo {
             return settings.copy(markAsInherited = isInherited)
         }
 
-        private fun Schema.getInLinedProperties(
+        private fun Schema<*>.getInLinedProperties(
             settings: Settings,
-            enclosingSchema: Schema? = null
+            enclosingSchema: Schema<*>? = null
         ): Collection<PropertyInfo> {
             val mainProperties: List<PropertyInfo> = properties.map { property ->
                 when (property.value.safeType()) {
@@ -79,7 +79,7 @@ sealed class PropertyInfo {
                             property.value,
                             settings.markAsInherited,
                             this,
-                            if (property.value.isInlinedArrayDefinition() || property.value.itemsSchema.isInlinedEnumDefinition())
+                            if (property.value.isInlinedArrayDefinition() || property.value.items.isInlinedEnumDefinition())
                                 enclosingSchema
                             else null
                         )
@@ -116,7 +116,7 @@ sealed class PropertyInfo {
                                 this
                             )
                     else ->
-                        if (property.value.isWriteOnly && settings.excludeWriteOnly) {
+                        if (property.value.writeOnly && settings.excludeWriteOnly) {
                             null
                         } else {
                             Field(
@@ -137,7 +137,7 @@ sealed class PropertyInfo {
             return if (hasAdditionalProperties())
                 mainProperties
                     .plus(
-                        AdditionalProperties(additionalPropertiesSchema, settings.markAsInherited, this)
+                        AdditionalProperties(additionalProperties, settings.markAsInherited, this)
                     )
             else mainProperties
         }
@@ -153,23 +153,23 @@ sealed class PropertyInfo {
     data class Field(
         override val isRequired: Boolean,
         override val oasKey: String,
-        override val schema: Schema,
+        override val schema: Schema<*>,
         override val isInherited: Boolean,
         val isPolymorphicDiscriminator: Boolean,
         val maybeDiscriminator: Map<String, DiscriminatorKey>?,
-        val enclosingSchema: Schema? = null
+        val enclosingSchema: Schema<*>? = null
     ) : PropertyInfo() {
         override val typeInfo: KotlinTypeInfo =
             KotlinTypeInfo.from(schema, oasKey, enclosingSchema?.toEnclosingSchemaInfo())
-        val pattern: String? = schema.safeField(Schema::getPattern)
-        val maxLength: Int? = schema.safeField(Schema::getMaxLength)
-        val minLength: Int? = schema.safeField(Schema::getMinLength)
-        val minimum: Number? = schema.safeField(Schema::getMinimum)
-        val exclusiveMinimum: Boolean? = schema.safeField(Schema::getExclusiveMinimum)
-        val maximum: Number? = schema.safeField(Schema::getMaximum)
-        val exclusiveMaximum: Boolean? = schema.safeField(Schema::getExclusiveMaximum)
+        val pattern: String? = schema.safeField(Schema<*>::getPattern)
+        val maxLength: Int? = schema.safeField(Schema<*>::getMaxLength)
+        val minLength: Int? = schema.safeField(Schema<*>::getMinLength)
+        val minimum: Number? = schema.safeField(Schema<*>::getMinimum)
+        val exclusiveMinimum: Boolean? = schema.safeField(Schema<*>::getExclusiveMinimum)
+        val maximum: Number? = schema.safeField(Schema<*>::getMaximum)
+        val exclusiveMaximum: Boolean? = schema.safeField(Schema<*>::getExclusiveMaximum)
 
-        private fun <T> Schema.safeField(getField: Schema.() -> T?): T? = this.getField()
+        private fun <T> Schema<*>.safeField(getField: Schema<*>.() -> T?): T? = this.getField()
     }
 
     interface CollectionValidation {
@@ -180,10 +180,10 @@ sealed class PropertyInfo {
     data class ListField(
         override val isRequired: Boolean,
         override val oasKey: String,
-        override val schema: Schema,
+        override val schema: Schema<*>,
         override val isInherited: Boolean,
-        val parentSchema: Schema,
-        val enclosingSchema: Schema?
+        val parentSchema: Schema<*>,
+        val enclosingSchema: Schema<*>?
     ) : PropertyInfo(), CollectionValidation {
         override val typeInfo: KotlinTypeInfo =
             KotlinTypeInfo.from(schema, oasKey, enclosingSchema?.toEnclosingSchemaInfo())
@@ -194,9 +194,9 @@ sealed class PropertyInfo {
     data class MapField(
         override val isRequired: Boolean,
         override val oasKey: String,
-        override val schema: Schema,
+        override val schema: Schema<*>,
         override val isInherited: Boolean,
-        val parentSchema: Schema
+        val parentSchema: Schema<*>
     ) : PropertyInfo() {
         override val typeInfo: KotlinTypeInfo = KotlinTypeInfo.from(schema, oasKey)
     }
@@ -204,9 +204,9 @@ sealed class PropertyInfo {
     data class ObjectRefField(
         override val isRequired: Boolean,
         override val oasKey: String,
-        override val schema: Schema,
+        override val schema: Schema<*>,
         override val isInherited: Boolean,
-        val parentSchema: Schema
+        val parentSchema: Schema<*>
     ) : PropertyInfo() {
         override val typeInfo: KotlinTypeInfo = KotlinTypeInfo.from(schema, oasKey)
     }
@@ -214,19 +214,19 @@ sealed class PropertyInfo {
     data class ObjectInlinedField(
         override val isRequired: Boolean,
         override val oasKey: String,
-        override val schema: Schema,
+        override val schema: Schema<*>,
         override val isInherited: Boolean,
-        val parentSchema: Schema,
-        val enclosingSchema: Schema?
+        val parentSchema: Schema<*>,
+        val enclosingSchema: Schema<*>?
     ) : PropertyInfo() {
         override val typeInfo: KotlinTypeInfo =
             KotlinTypeInfo.from(schema, oasKey, enclosingSchema?.toEnclosingSchemaInfo())
     }
 
     data class AdditionalProperties(
-        override val schema: Schema,
+        override val schema: Schema<*>,
         override val isInherited: Boolean,
-        val parentSchema: Schema
+        val parentSchema: Schema<*>
     ) : PropertyInfo() {
         override val oasKey: String = "properties"
         override val typeInfo: KotlinTypeInfo = KotlinTypeInfo.from(schema, "additionalProperties")
@@ -234,7 +234,7 @@ sealed class PropertyInfo {
     }
 
     data class OneOfAny(
-        override val schema: Schema,
+        override val schema: Schema<*>,
     ) : PropertyInfo() {
         override val oasKey: String = "oneOf"
         override val typeInfo: KotlinTypeInfo = KotlinTypeInfo.AnyType
