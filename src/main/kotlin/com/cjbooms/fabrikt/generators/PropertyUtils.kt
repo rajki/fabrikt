@@ -26,7 +26,6 @@ data class ClassSettings(
 
 object PropertyUtils {
     fun PropertyInfo.addToClass(
-        modelName: String,
         schemaName: String,
         type: TypeName,
         parameterizedType: TypeName,
@@ -36,11 +35,11 @@ object PropertyUtils {
         validationAnnotations: ValidationAnnotations = JavaxValidationAnnotations,
     ) {
         val wrappedType =
-            if (classSettings.isMergePatchPattern) {
+            if (classSettings.isMergePatchPattern && !this.isRequired) {
                 ClassName(
                     "org.openapitools.jackson.nullable",
                     "JsonNullable",
-                ).parameterizedBy(type.copy(nullable = false))
+                ).parameterizedBy(type.copy(nullable = this.schema.isNullable))
             } else {
                 type
             }
@@ -87,18 +86,6 @@ object PropertyUtils {
                 ClassSettings.PolymorphyType.SUB -> {
                     if (this is PropertyInfo.Field && isPolymorphicDiscriminator) {
                         property.addModifiers(KModifier.OVERRIDE)
-                        val discriminators = maybeDiscriminator.getDiscriminatorMappings(schemaName, modelName)
-                        if (discriminators.size == 1) {
-                            when (val discriminator = discriminators.first()) {
-                                is PropertyInfo.DiscriminatorKey.EnumKey ->
-                                    property.initializer("%T.%L", wrappedType, discriminator.enumKey)
-
-                                is PropertyInfo.DiscriminatorKey.StringKey ->
-                                    property.initializer("%S", discriminator.stringValue)
-                            }
-                        } else {
-                            property.addAnnotation(JacksonMetadata.jacksonParameterAnnotation(oasKey))
-                        }
                     } else {
                         if (isInherited) {
                             property.addModifiers(KModifier.OVERRIDE)
@@ -117,17 +104,35 @@ object PropertyUtils {
                 }
             }
 
-            if (this !is PropertyInfo.Field ||
-                !isPolymorphicDiscriminator ||
-                isSubTypeDiscriminatorWithNoValue(classSettings) ||
-                isSubTypeDiscriminatorWithMultipleValues(classSettings, modelName, schemaName)
-            ) {
+            if (isDiscriminatorFieldWithSingleKnownValue(classSettings, schemaName)) {
+                this as PropertyInfo.Field
+                if (classSettings.polymorphyType == ClassSettings.PolymorphyType.SUB) {
+                    property.initializer(name)
+                    property.addAnnotation(JacksonMetadata.jacksonParameterAnnotation(oasKey))
+                    val constructorParameter: ParameterSpec.Builder = ParameterSpec.builder(name, wrappedType)
+                    val discriminators = maybeDiscriminator.getDiscriminatorMappings(schemaName)
+                    when (val discriminator = discriminators.first()) {
+                        is PropertyInfo.DiscriminatorKey.EnumKey ->
+                            constructorParameter.defaultValue("%T.%L", wrappedType, discriminator.enumKey)
+
+                        is PropertyInfo.DiscriminatorKey.StringKey ->
+                            constructorParameter.defaultValue("%S", discriminator.stringValue)
+                    }
+                    constructorBuilder.addParameter(constructorParameter.build())
+                }
+            } else {
                 property.initializer(name)
                 val constructorParameter: ParameterSpec.Builder = ParameterSpec.builder(name, wrappedType)
                 val oasDefault = getDefaultValue(this, parameterizedType)
                 if (!isRequired) {
                     if (oasDefault != null) {
-                        oasDefault.setDefault(constructorParameter)
+                        val wrappedDefault =
+                            if (classSettings.isMergePatchPattern) {
+                                OasDefault.JsonNullableValue(oasDefault)
+                            } else {
+                                oasDefault
+                            }
+                        constructorParameter.defaultValue(wrappedDefault.getDefault())
                     } else {
                         val undefinedDefault = if (classSettings.isMergePatchPattern) {
                             "JsonNullable.undefined()"
@@ -144,12 +149,19 @@ object PropertyUtils {
         classBuilder.addProperty(property.build())
     }
 
+    private fun PropertyInfo.isDiscriminatorFieldWithSingleKnownValue(
+        classSettings: ClassSettings,
+        schemaName: String,
+    ) = this is PropertyInfo.Field &&
+        isPolymorphicDiscriminator &&
+        !isSubTypeDiscriminatorWithNoValue(classSettings) &&
+        !isSubTypeDiscriminatorWithMultipleValues(classSettings, schemaName)
+
     private fun Map<String, PropertyInfo.DiscriminatorKey>?.getDiscriminatorMappings(
-        modelName: String,
         schemaName: String,
     ): List<PropertyInfo.DiscriminatorKey> =
         this?.filter {
-            it.value.stringValue == schemaName || it.value.modelName == modelName || it.value.modelName == schemaName
+            it.value.stringValue == schemaName || it.value.modelName == schemaName
         }?.map { it.value }.orEmpty()
 
     private fun PropertyInfo.Field.isSubTypeDiscriminatorWithNoValue(classType: ClassSettings) =
@@ -159,12 +171,11 @@ object PropertyUtils {
 
     private fun PropertyInfo.Field.isSubTypeDiscriminatorWithMultipleValues(
         classType: ClassSettings,
-        modelName: String,
         schemaName: String,
     ) =
         classType.polymorphyType == ClassSettings.PolymorphyType.SUB &&
             isPolymorphicDiscriminator &&
-            maybeDiscriminator.getDiscriminatorMappings(modelName, schemaName).size > 1
+            maybeDiscriminator.getDiscriminatorMappings(schemaName).size > 1
 
     private fun getDefaultValue(propTypeInfo: PropertyInfo, parameterizedType: TypeName): OasDefault? {
         return when (propTypeInfo) {

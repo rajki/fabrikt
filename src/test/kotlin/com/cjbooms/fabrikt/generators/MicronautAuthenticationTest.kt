@@ -6,6 +6,7 @@ import com.cjbooms.fabrikt.cli.ControllerCodeGenTargetType
 import com.cjbooms.fabrikt.configurations.Packages
 import com.cjbooms.fabrikt.generators.controller.MicronautControllerInterfaceGenerator
 import com.cjbooms.fabrikt.model.SourceApi
+import com.cjbooms.fabrikt.util.ModelNameRegistry
 import com.cjbooms.fabrikt.util.ResourceHelper.readTextResource
 import com.squareup.kotlinpoet.FileSpec
 import com.squareup.kotlinpoet.TypeSpec
@@ -30,7 +31,12 @@ class MicronautAuthenticationTest {
 
     private fun setupTest(testPath: String): Collection<FileSpec> {
         val api = SourceApi(readTextResource("/authenticationTest/$testPath"))
-        return MicronautControllerInterfaceGenerator(Packages(basePackage), api, setOf(ControllerCodeGenOptionType.AUTHENTICATION)).generate().files
+        return MicronautControllerInterfaceGenerator(
+            Packages(basePackage),
+            api,
+            JavaxValidationAnnotations,
+            setOf(ControllerCodeGenOptionType.AUTHENTICATION)
+        ).generate().files
     }
 
     @BeforeEach
@@ -40,6 +46,7 @@ class MicronautAuthenticationTest {
             controllerTarget = ControllerCodeGenTargetType.MICRONAUT,
             controllerOptions = setOf(ControllerCodeGenOptionType.AUTHENTICATION),
         )
+        ModelNameRegistry.clear()
     }
 
     // global authentication tests
@@ -48,13 +55,13 @@ class MicronautAuthenticationTest {
     fun `ensure that global authentication set to any authentication will add the required parameter`(testCase: Pair<String, String>) {
         val controllers = setupTest(testCase.first)
         val functionAnnotations = controllers.flatMap { it.members }
-            .flatMap { (it as TypeSpec).funSpecs.flatMap { it.annotations } }
+            .flatMap { (it as TypeSpec).funSpecs.flatMap { t -> t.annotations } }
 
         val functionParameters = controllers.flatMap { it.members }
-            .flatMap { (it as TypeSpec).funSpecs.flatMap { it.parameters } }
+            .flatMap { (it as TypeSpec).funSpecs.flatMap { t -> t.parameters } }
 
         assertThat(functionAnnotations).anySatisfy { annotation ->
-            assertThat(annotation.className.canonicalName).isEqualTo("io.micronaut.security.annotation.Secured")
+            assertThat(annotation.typeName.toString()).isEqualTo("io.micronaut.security.`annotation`.Secured")
             assertThat(annotation.members).anyMatch { it.toString() == testCase.second }
         }
 
@@ -73,13 +80,13 @@ class MicronautAuthenticationTest {
     fun `ensure that no authentication defined will add no parameter`() {
         val controllers = setupTest("global_authentication_none.yml")
         val functionAnnotations = controllers.flatMap { it.members }
-            .flatMap { (it as TypeSpec).funSpecs.flatMap { it.annotations } }
+            .flatMap { (it as TypeSpec).funSpecs.flatMap { t -> t.annotations } }
 
         val functionParameters = controllers.flatMap { it.members }
-            .flatMap { (it as TypeSpec).funSpecs.flatMap { it.parameters } }
+            .flatMap { (it as TypeSpec).funSpecs.flatMap { t -> t.parameters } }
 
         assertThat(functionAnnotations).noneSatisfy { annotation ->
-            assertThat(annotation.className.simpleName).isEqualTo("Secured")
+            assertThat(annotation.typeName.toString()).isEqualTo("Secured")
         }
 
         assertThat(functionParameters).noneSatisfy { parameter ->
@@ -95,7 +102,7 @@ class MicronautAuthenticationTest {
         val prohibitedController = (controllers.find { it.name == "ProhibitedController" }!!.members.single() as TypeSpec).funSpecs.single()
 
         assertThat(prohibitedController.annotations).anySatisfy { annotation ->
-            assertThat(annotation.className.canonicalName).isEqualTo("io.micronaut.security.annotation.Secured")
+            assertThat(annotation.typeName.toString()).isEqualTo("io.micronaut.security.`annotation`.Secured")
             assertThat(annotation.members).anyMatch { it.toString() == "SecurityRule.IS_ANONYMOUS" }
         }
 
@@ -106,7 +113,7 @@ class MicronautAuthenticationTest {
         val requiredController = (controllers.find { it.name == "RequiredController" }!!.members.single() as TypeSpec).funSpecs.single()
 
         assertThat(requiredController.annotations).anySatisfy { annotation ->
-            assertThat(annotation.className.canonicalName).isEqualTo("io.micronaut.security.annotation.Secured")
+            assertThat(annotation.typeName.toString()).isEqualTo("io.micronaut.security.`annotation`.Secured")
             assertThat(annotation.members).anyMatch { it.toString() == "SecurityRule.IS_AUTHENTICATED" }
         }
 
@@ -119,7 +126,7 @@ class MicronautAuthenticationTest {
         val optionalController = (controllers.find { it.name == "OptionalController" }!!.members.single() as TypeSpec).funSpecs.single()
 
         assertThat(optionalController.annotations).anySatisfy { annotation ->
-            assertThat(annotation.className.canonicalName).isEqualTo("io.micronaut.security.annotation.Secured")
+            assertThat(annotation.typeName.toString()).isEqualTo("io.micronaut.security.`annotation`.Secured")
             assertThat(annotation.members).anyMatch { it.toString() == "SecurityRule.IS_AUTHENTICATED, SecurityRule.IS_ANONYMOUS" }
         }
 
@@ -132,7 +139,7 @@ class MicronautAuthenticationTest {
         val noneController = (controllers.find { it.name == "NoneController" }!!.members.single() as TypeSpec).funSpecs.single()
 
         assertThat(noneController.annotations).noneSatisfy { annotation ->
-            assertThat(annotation.className.simpleName).isEqualTo("Secured")
+            assertThat(annotation.typeName.toString()).isEqualTo("Secured")
         }
 
         assertThat(noneController.parameters).noneSatisfy { parameter ->
@@ -142,7 +149,7 @@ class MicronautAuthenticationTest {
         val defaultController = (controllers.find { it.name == "DefaultController" }!!.members.single() as TypeSpec).funSpecs.single()
 
         assertThat(defaultController.annotations).anySatisfy { annotation ->
-            assertThat(annotation.className.canonicalName).isEqualTo("io.micronaut.security.annotation.Secured")
+            assertThat(annotation.typeName.toString()).isEqualTo("io.micronaut.security.`annotation`.Secured")
             assertThat(annotation.members).anyMatch { it.toString() == "SecurityRule.IS_AUTHENTICATED" }
         }
 
@@ -159,7 +166,7 @@ class MicronautAuthenticationTest {
         val prohibitedController = (controllers.find { it.name == "ProhibitedController" }!!.members.single() as TypeSpec).funSpecs.single()
 
         assertThat(prohibitedController.annotations).anySatisfy { annotation ->
-            assertThat(annotation.className.canonicalName).isEqualTo("io.micronaut.security.annotation.Secured")
+            assertThat(annotation.typeName.toString()).isEqualTo("io.micronaut.security.`annotation`.Secured")
             assertThat(annotation.members).anyMatch { it.toString() == "SecurityRule.IS_ANONYMOUS" }
         }
 
@@ -170,7 +177,7 @@ class MicronautAuthenticationTest {
         val requiredController = (controllers.find { it.name == "RequiredController" }!!.members.single() as TypeSpec).funSpecs.single()
 
         assertThat(requiredController.annotations).anySatisfy { annotation ->
-            assertThat(annotation.className.canonicalName).isEqualTo("io.micronaut.security.annotation.Secured")
+            assertThat(annotation.typeName.toString()).isEqualTo("io.micronaut.security.`annotation`.Secured")
             assertThat(annotation.members).anyMatch { it.toString() == "SecurityRule.IS_AUTHENTICATED" }
         }
 
@@ -182,7 +189,7 @@ class MicronautAuthenticationTest {
         val optionalController = (controllers.find { it.name == "OptionalController" }!!.members.single() as TypeSpec).funSpecs.single()
 
         assertThat(optionalController.annotations).anySatisfy { annotation ->
-            assertThat(annotation.className.canonicalName).isEqualTo("io.micronaut.security.annotation.Secured")
+            assertThat(annotation.typeName.toString()).isEqualTo("io.micronaut.security.`annotation`.Secured")
             assertThat(annotation.members).anyMatch { it.toString() == "SecurityRule.IS_AUTHENTICATED, SecurityRule.IS_ANONYMOUS" }
         }
 
@@ -195,7 +202,7 @@ class MicronautAuthenticationTest {
         val noneController = (controllers.find { it.name == "NoneController" }!!.members.single() as TypeSpec).funSpecs.single()
 
         assertThat(noneController.annotations).noneSatisfy { annotation ->
-            assertThat(annotation.className.simpleName).isEqualTo("Secured")
+            assertThat(annotation.typeName.toString()).isEqualTo("io.micronaut.security.annotation, Secured")
         }
 
         assertThat(noneController.parameters).noneSatisfy { parameter ->

@@ -1,10 +1,11 @@
 package examples.okHttpClient.models
 
-import com.fasterxml.jackson.annotation.JsonProperty
-import com.fasterxml.jackson.annotation.JsonSubTypes
-import com.fasterxml.jackson.annotation.JsonTypeInfo
-import com.fasterxml.jackson.annotation.JsonValue
+import com.fasterxml.jackson.`annotation`.JsonProperty
+import com.fasterxml.jackson.`annotation`.JsonSubTypes
+import com.fasterxml.jackson.`annotation`.JsonTypeInfo
+import com.fasterxml.jackson.`annotation`.JsonValue
 import java.time.OffsetDateTime
+import java.util.UUID
 import javax.validation.Valid
 import javax.validation.constraints.NotNull
 import javax.validation.constraints.Size
@@ -18,66 +19,83 @@ import kotlin.collections.Map
     use = JsonTypeInfo.Id.NAME,
     include = JsonTypeInfo.As.EXISTING_PROPERTY,
     property = "model_type",
-    visible = true
+    visible = true,
 )
 @JsonSubTypes(
     JsonSubTypes.Type(
         value = FirstModel::class,
         name =
-        "first_model"
+        "first_model",
     ),
     JsonSubTypes.Type(
         value = SecondModel::class,
         name =
-        "second_model"
+        "second_model",
     ),
-    JsonSubTypes.Type(value = ThirdModel::class, name = "third_model")
+    JsonSubTypes.Type(value = ThirdModel::class, name = "third_model"),
 )
-sealed class Content(
-    open val id: String? = null,
-    open val firstAttr: OffsetDateTime? = null,
-    open val secondAttr: String? = null,
-    open val thirdAttr: ContentThirdAttr? = null,
-    open val etag: String? = null
+public sealed class Content(
+    public open val id: String? = null,
+    public open val firstAttr: OffsetDateTime? = null,
+    public open val secondAttr: String? = null,
+    public open val thirdAttr: ContentThirdAttr? = null,
+    public open val etag: String? = null,
 ) {
-    abstract val modelType: ContentModelType
+    public abstract val modelType: ContentModelType
 }
 
-enum class ContentModelType(
+public enum class ContentModelType(
     @JsonValue
-    val value: String
+    public val `value`: String,
 ) {
     FIRST_MODEL("first_model"),
-
     SECOND_MODEL("second_model"),
+    THIRD_MODEL("third_model"),
+    ;
 
-    THIRD_MODEL("third_model");
-
-    companion object {
+    public companion object {
         private val mapping: Map<String, ContentModelType> =
             values().associateBy(ContentModelType::value)
 
-        fun fromValue(value: String): ContentModelType? = mapping[value]
+        public fun fromValue(`value`: String): ContentModelType? = mapping[value]
     }
 }
 
-enum class ContentThirdAttr(
+public enum class ContentThirdAttr(
     @JsonValue
-    val value: String
+    public val `value`: String,
 ) {
     ENUM_TYPE_1("enum_type_1"),
+    ENUM_TYPE_2("enum_type_2"),
+    ;
 
-    ENUM_TYPE_2("enum_type_2");
-
-    companion object {
+    public companion object {
         private val mapping: Map<String, ContentThirdAttr> =
             values().associateBy(ContentThirdAttr::value)
 
-        fun fromValue(value: String): ContentThirdAttr? = mapping[value]
+        public fun fromValue(`value`: String): ContentThirdAttr? = mapping[value]
     }
 }
 
-data class FirstModel(
+public data class Failure(
+    @param:JsonProperty("traceId")
+    @get:JsonProperty("traceId")
+    @get:NotNull
+    public val traceId: UUID,
+    @param:JsonProperty("errorCode")
+    @get:JsonProperty("errorCode")
+    @get:NotNull
+    public val errorCode: String,
+    @param:JsonProperty("error")
+    @get:JsonProperty("error")
+    @get:NotNull
+    public val error: String,
+    @param:JsonProperty("subType")
+    @get:JsonProperty("subType")
+    public val subType: String? = null,
+)
+
+public data class FirstModel(
     @param:JsonProperty("id")
     @get:JsonProperty("id")
     override val id: String? = null,
@@ -95,23 +113,23 @@ data class FirstModel(
     override val etag: String? = null,
     @param:JsonProperty("extra_first_attr")
     @get:JsonProperty("extra_first_attr")
-    val extraFirstAttr: List<String>? = null
-) : Content(id, firstAttr, secondAttr, thirdAttr, etag) {
+    public val extraFirstAttr: List<String>? = null,
     @get:JsonProperty("model_type")
     @get:NotNull
-    override val modelType: ContentModelType = ContentModelType.FIRST_MODEL
-}
+    @param:JsonProperty("model_type")
+    override val modelType: ContentModelType = ContentModelType.FIRST_MODEL,
+) : Content(id, firstAttr, secondAttr, thirdAttr, etag)
 
-data class QueryResult(
+public data class QueryResult(
     @param:JsonProperty("items")
     @get:JsonProperty("items")
     @get:NotNull
     @get:Size(min = 0)
     @get:Valid
-    val items: List<Content>
+    public val items: List<Content>,
 )
 
-data class SecondModel(
+public data class SecondModel(
     @param:JsonProperty("id")
     @get:JsonProperty("id")
     override val id: String? = null,
@@ -129,17 +147,17 @@ data class SecondModel(
     override val etag: String? = null,
     @param:JsonProperty("extra_first_attr")
     @get:JsonProperty("extra_first_attr")
-    val extraFirstAttr: String? = null,
+    public val extraFirstAttr: String? = null,
     @param:JsonProperty("extra_second_attr")
     @get:JsonProperty("extra_second_attr")
-    val extraSecondAttr: Boolean? = null
-) : Content(id, firstAttr, secondAttr, thirdAttr, etag) {
+    public val extraSecondAttr: Boolean? = null,
     @get:JsonProperty("model_type")
     @get:NotNull
-    override val modelType: ContentModelType = ContentModelType.SECOND_MODEL
-}
+    @param:JsonProperty("model_type")
+    override val modelType: ContentModelType = ContentModelType.SECOND_MODEL,
+) : Content(id, firstAttr, secondAttr, thirdAttr, etag)
 
-data class ThirdModel(
+public data class ThirdModel(
     @param:JsonProperty("id")
     @get:JsonProperty("id")
     override val id: String? = null,
@@ -157,12 +175,12 @@ data class ThirdModel(
     override val etag: String? = null,
     @param:JsonProperty("extra_first_attr")
     @get:JsonProperty("extra_first_attr")
-    val extraFirstAttr: OffsetDateTime? = null,
+    public val extraFirstAttr: OffsetDateTime? = null,
     @param:JsonProperty("extra_second_attr")
     @get:JsonProperty("extra_second_attr")
-    val extraSecondAttr: Int? = null
-) : Content(id, firstAttr, secondAttr, thirdAttr, etag) {
+    public val extraSecondAttr: Int? = null,
     @get:JsonProperty("model_type")
     @get:NotNull
-    override val modelType: ContentModelType = ContentModelType.THIRD_MODEL
-}
+    @param:JsonProperty("model_type")
+    override val modelType: ContentModelType = ContentModelType.THIRD_MODEL,
+) : Content(id, firstAttr, secondAttr, thirdAttr, etag)

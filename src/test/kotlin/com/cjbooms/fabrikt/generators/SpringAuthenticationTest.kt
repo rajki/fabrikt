@@ -6,6 +6,7 @@ import com.cjbooms.fabrikt.cli.ControllerCodeGenTargetType
 import com.cjbooms.fabrikt.configurations.Packages
 import com.cjbooms.fabrikt.generators.controller.SpringControllerInterfaceGenerator
 import com.cjbooms.fabrikt.model.SourceApi
+import com.cjbooms.fabrikt.util.ModelNameRegistry
 import com.cjbooms.fabrikt.util.ResourceHelper.readTextResource
 import com.squareup.kotlinpoet.FileSpec
 import com.squareup.kotlinpoet.TypeSpec
@@ -29,7 +30,12 @@ class SpringAuthenticationTest {
 
     private fun setupTest(testPath: String): Collection<FileSpec> {
         val api = SourceApi(readTextResource("/authenticationTest/$testPath"))
-        return SpringControllerInterfaceGenerator(Packages(basePackage), api, setOf(ControllerCodeGenOptionType.AUTHENTICATION)).generate().files
+        return SpringControllerInterfaceGenerator(
+            Packages(basePackage),
+            api,
+            JavaxValidationAnnotations,
+            setOf(ControllerCodeGenOptionType.AUTHENTICATION)
+        ).generate().files
     }
 
     @BeforeEach
@@ -38,6 +44,7 @@ class SpringAuthenticationTest {
             genTypes = setOf(CodeGenerationType.CONTROLLERS),
             controllerTarget = ControllerCodeGenTargetType.SPRING,
         )
+        ModelNameRegistry.clear()
     }
 
     // global authentication tests
@@ -46,7 +53,7 @@ class SpringAuthenticationTest {
         val controllers = setupTest("global_authentication_required.yml")
 
         val functionParameters = controllers.flatMap { it.members }
-            .flatMap { (it as TypeSpec).funSpecs.flatMap { it.parameters } }
+            .flatMap { (it as TypeSpec).funSpecs.flatMap { t -> t.parameters } }
 
         assertThat(functionParameters).anySatisfy { parameter ->
             assertThat(parameter.name).isEqualTo("authentication")
@@ -58,7 +65,7 @@ class SpringAuthenticationTest {
         val controllers = setupTest("global_authentication_optional.yml")
 
         val functionParameters = controllers.flatMap { it.members }
-            .flatMap { (it as TypeSpec).funSpecs.flatMap { it.parameters } }
+            .flatMap { (it as TypeSpec).funSpecs.flatMap { t -> t.parameters } }
 
         assertThat(functionParameters).anySatisfy { parameter ->
             assertThat(parameter.name).isEqualTo("authentication")
@@ -72,7 +79,7 @@ class SpringAuthenticationTest {
         val controllers = setupTest(testCasePath)
 
         val functionParameters = controllers.flatMap { it.members }
-            .flatMap { (it as TypeSpec).funSpecs.flatMap { it.parameters } }
+            .flatMap { (it as TypeSpec).funSpecs.flatMap { t -> t.parameters } }
 
         assertThat(functionParameters).noneSatisfy { parameter ->
             assertThat(parameter.name).isEqualTo("authentication")

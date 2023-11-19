@@ -4,7 +4,6 @@ import com.cjbooms.fabrikt.cli.ModelCodeGenOptionType
 import com.cjbooms.fabrikt.generators.MutableSettings
 import com.cjbooms.fabrikt.model.OasType
 import com.cjbooms.fabrikt.model.PropertyInfo
-import com.cjbooms.fabrikt.util.NormalisedString.toMapValueClassName
 import com.cjbooms.fabrikt.util.NormalisedString.toModelClassName
 import com.reprezen.jsonoverlay.Overlay
 import com.reprezen.kaizen.oasparser.model3.Discriminator
@@ -40,22 +39,28 @@ object KaizenParserExtensions {
         getDiscriminatorForInLinedObjectUnderAllOf()?.propertyName != null
 
     fun Schema.isInlinedObjectDefinition() =
-        isObjectType() && !isSchemaLess() && Overlay.of(this).pathFromRoot.contains("properties")
+        isObjectType() && !isSchemaLess() && (
+            Overlay.of(this).pathFromRoot.contains("properties") ||
+                Overlay.of(this).pathFromRoot.contains("items")
+            )
 
     fun Schema.isInlinedTypedAdditionalProperties() =
         isObjectType() && !isSchemaLess() && Overlay.of(this).pathFromRoot.contains("additionalProperties")
 
     fun Schema.isInlinedEnumDefinition() =
-        isEnumDefinition() && !isSchemaLess() && Overlay.of(this).pathFromRoot.contains("properties")
+        isEnumDefinition() && !isSchemaLess() && (
+            Overlay.of(this).pathFromRoot.contains("properties") ||
+                Overlay.of(this).pathFromRoot.contains("items")
+            )
 
     fun Schema.isInlinedArrayDefinition() =
         isArrayType() && !isSchemaLess() && this.itemsSchema.isInlinedObjectDefinition()
 
-    fun Schema.toModelClassName(enclosingClassName: String = "") = enclosingClassName + safeName().toModelClassName()
-
-    fun Schema.toMapValueClassName() = safeName().toMapValueClassName()
-
-    fun Schema.isSchemaLess() = isObjectType() && properties?.isEmpty() == true
+    fun Schema.isSchemaLess() = isObjectType() && properties?.isEmpty() == true && (
+        oneOfSchemas?.isNotEmpty() != true &&
+            allOfSchemas?.isNotEmpty() != true &&
+            anyOfSchemas?.isNotEmpty() != true
+        )
 
     fun Schema.isSimpleMapDefinition() = hasAdditionalProperties() && properties?.isEmpty() == true
 
@@ -140,6 +145,8 @@ object KaizenParserExtensions {
             requiredFields.contains(prop.key) || isDiscriminatorProperty(prop) // A discriminator property should be required
         }
 
+    fun Schema.getSchemaRefName() = Overlay.of(this).jsonReference.split("/").last()
+
     fun Schema.isDiscriminatorProperty(prop: Map.Entry<String, Schema>): Boolean =
         discriminator?.propertyName == prop.key
 
@@ -181,12 +188,14 @@ object KaizenParserExtensions {
     fun Schema.safeName(): String =
         when {
             isOneOfPolymorphicTypes() -> this.oneOfSchemas.first().allOfSchemas.first().safeName()
+            isPropertyWithAllOfSingleType() -> this.allOfSchemas.first().safeName()
             name != null -> name
             else -> Overlay.of(this).pathFromRoot
                 .splitToSequence("/")
                 .filterNot { invalidNames.contains(it) }
                 .filter { it.toIntOrNull() == null } // Ignore numeric-identifiers path-parts in: allOf / oneOf / anyOf
                 .last()
+                .replace("~1", "-") // so application~1octet-stream becomes application-octet-stream
         }
 
     fun Schema.safeType(): String? =
@@ -212,6 +221,26 @@ object KaizenParserExtensions {
 
     fun Schema.isOneOfSuperInterface() =
         discriminator != null && discriminator.propertyName != null && oneOfSchemas.isNotEmpty()
+
+    private fun Schema.isPropertyWithAllOfSingleType() =
+        allOfSchemas?.size == 1 && isInlinedPropertySchema()
+
+    /**
+     * The `pathFromRoot` of a property schema ends with
+     * `/properties/<name of property>`, so we check if the
+     * penultimate segment is `properties`.
+     */
+    private fun Schema.isInlinedPropertySchema(): Boolean {
+        val path = Overlay.of(this).pathFromRoot
+        val lastSegment = path.lastIndexOf('/')
+        if (lastSegment != -1) {
+            val penultimateSegment = path.lastIndexOf('/', lastSegment - 1)
+            if (penultimateSegment != -1) {
+                return path.startsWith("/properties/", penultimateSegment)
+            }
+        }
+        return false
+    }
 
     fun OpenApi3.basePath(): String =
         servers

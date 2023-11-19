@@ -112,7 +112,7 @@ object GeneratorUtils {
 
     private fun Schema.toClassName() = KotlinTypeInfo.from(this).modelKClass.asTypeName()
 
-    fun String.toClassName(basePackage: String) = ClassName(packageName = basePackage, simpleName = this)
+    fun String.toClassName(basePackage: String) = ClassName(packageName = basePackage, this)
 
     fun RequestBody.getPrimaryContentMediaType(): Map.Entry<String, MediaType>? =
         this.contentMediaTypes.entries.firstOrNull()
@@ -124,15 +124,17 @@ object GeneratorUtils {
 
     fun Operation.firstResponse(): Response? = this.getBodyResponses().firstOrNull()
 
-    fun Operation.getPrimaryContentMediaType(): Map.Entry<String, MediaType>? =
-        this.getBodyResponses().map { response -> response.getPrimaryContentMediaType() }.firstOrNull()
+    fun Operation.getPrimaryContentMediaType(): Map.Entry<String, MediaType>? {
+        val responses = getBodySuccessResponses().ifEmpty { getBodyResponses() }
+        return responses.map { response -> response.getPrimaryContentMediaType() }.firstOrNull()
+    }
 
     fun Operation.getPrimaryContentMediaTypeKey(): String? = this.firstResponse()?.getPrimaryContentMediaType()?.key
 
     fun Operation.hasMultipleContentMediaTypes(): Boolean? = this.firstResponse()?.hasMultipleContentMediaTypes()
 
-    fun Operation.hasMultipleResponseSchemas(): Boolean =
-            getBodyResponses().flatMap { it.contentMediaTypes.values }.map { it.schema.name }.distinct().size > 1
+    fun Operation.hasMultipleSuccessResponseSchemas(): Boolean =
+            getBodySuccessResponses().flatMap { it.contentMediaTypes.values }.map { it.schema.name }.distinct().size > 1
 
     fun Operation.getPathParams(): List<Parameter> = this.filterParams("path")
 
@@ -142,6 +144,12 @@ object GeneratorUtils {
 
     private fun Operation.getBodyResponses(): List<Response> =
         this.responses.filter { it.key != "default" }.values.filter(Response::hasContentMediaTypes)
+
+    private fun Operation.getBodySuccessResponses(): List<Response> =
+        getSuccessResponses().values.filter(Response::hasContentMediaTypes)
+
+    private fun Operation.getSuccessResponses(): Map<String, Response> =
+        this.responses.filter { it.key.toIntOrNull()?.let { status -> status in 200..399 } ?: false }
 
     private fun Operation.filterParams(paramType: String): List<Parameter> = this.parameters.filter { it.`in` == paramType }
 

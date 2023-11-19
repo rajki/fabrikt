@@ -2,14 +2,18 @@ import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import org.jetbrains.dokka.gradle.DokkaTask
 
 plugins {
-    id("org.jetbrains.kotlin.jvm") version "1.6.0" // Apply the Kotlin JVM plugin to add support for Kotlin.
-    id("com.github.johnrengelman.shadow") version "4.0.1"
-    id("org.jetbrains.dokka") version "0.10.1"
-    id("com.palantir.git-version") version "0.12.3"
+    id("org.jetbrains.kotlin.jvm") version "1.8.20" // Apply the Kotlin JVM plugin to add support for Kotlin.
+    id("com.github.johnrengelman.shadow") version "8.1.1"
+    id("org.jetbrains.dokka") version "1.8.10"
+    id("com.palantir.git-version") version "3.0.0"
     id("maven-publish")
     id("signing")
 
     `java-library` // For API and implementation separation.
+}
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
 }
 
 val executableName = "fabrikt"
@@ -33,11 +37,11 @@ repositories {
 }
 
 dependencies {
-    val jacksonVersion = "2.14.2"
+    val jacksonVersion = "2.15.1"
 
     implementation(platform("org.jetbrains.kotlin:kotlin-bom"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
-    implementation("com.github.jknack:handlebars:4.1.0")
+    implementation("com.github.jknack:handlebars:4.3.1")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion")
     implementation("com.fasterxml.jackson.core:jackson-databind:$jacksonVersion")
     implementation("com.fasterxml.jackson.core:jackson-core:$jacksonVersion")
@@ -46,27 +50,31 @@ dependencies {
     implementation("com.beust:jcommander:1.82")
 //    implementation("com.reprezen.kaizen:openapi-parser:4.0.4") { exclude(group = "junit") }
     implementation("io.swagger.parser.v3:swagger-parser:2.1.14")
-    implementation("com.reprezen.jsonoverlay:jsonoverlay:4.0.3")
-    implementation("com.squareup:kotlinpoet:1.3.0") { exclude(module = "kotlin-stdlib-jre7") }
-    implementation("com.google.flogger:flogger:0.4")
+    implementation("com.reprezen.jsonoverlay:jsonoverlay:4.0.4")
+    implementation("com.squareup:kotlinpoet:1.14.2") { exclude(module = "kotlin-stdlib-jre7") }
+    implementation("com.google.flogger:flogger:0.7.4")
 
-    testImplementation("org.junit.jupiter:junit-jupiter-api:5.1.0")
-    testImplementation("org.junit.jupiter:junit-jupiter-engine:5.1.0")
-    testImplementation("org.junit.jupiter:junit-jupiter-params:5.1.0")
-    testImplementation("org.assertj:assertj-core:3.14.0")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.9.2")
+    testImplementation("org.junit.jupiter:junit-jupiter-engine:5.9.2")
+    testImplementation("org.junit.jupiter:junit-jupiter-params:5.9.2")
+    testImplementation("org.assertj:assertj-core:3.24.2")
 
     // Below dependencies are solely present so code examples in the test resources dir compile
     testImplementation("javax.validation:validation-api:2.0.1.Final")
     testImplementation("jakarta.validation:jakarta.validation-api:3.0.2")
-    testImplementation("org.springframework:spring-webmvc:5.1.9.RELEASE")
-    testImplementation("org.springframework.security:spring-security-web:5.4.0")
-    testImplementation("io.micronaut:micronaut-core:3.8.4")
-    testImplementation("io.micronaut:micronaut-http:3.8.4")
-    testCompileOnly("io.micronaut.security:micronaut-security:3.8.3")
-    testImplementation("com.squareup.okhttp3:okhttp:4.9.1")
-    testImplementation("com.pinterest.ktlint:ktlint-core:0.41.0")
-    testImplementation("com.pinterest:ktlint:0.41.0")
+    testImplementation("org.springframework:spring-webmvc:6.0.9")
+    testImplementation("org.springframework.security:spring-security-web:6.1.0")
+    testImplementation("io.micronaut:micronaut-core:3.8.7")
+    testImplementation("io.micronaut:micronaut-http:3.8.7")
+    //testCompileOnly("io.micronaut.security:micronaut-security:3.8.7")
+    testImplementation("com.squareup.okhttp3:okhttp:4.10.0")
     testImplementation("org.openapitools:jackson-databind-nullable:0.2.6")
+
+    testImplementation(platform("com.pinterest.ktlint:ktlint-bom:0.49.0"))
+    testImplementation("com.pinterest:ktlint")
+    testImplementation("com.pinterest.ktlint:ktlint-core")
+    testImplementation("com.pinterest.ktlint:ktlint-rule-engine")
+    testImplementation("com.pinterest.ktlint:ktlint-ruleset-standard")
 }
 
 tasks {
@@ -82,9 +90,8 @@ tasks {
         archiveClassifier.set("")
     }
 
-    val dokka by getting(DokkaTask::class) {
-        outputFormat = "html"
-        outputDirectory = "$buildDir/dokka"
+    val dokka = getByName<DokkaTask>("dokkaHtml") {
+        outputDirectory.set(file("$buildDir/dokka"))
     }
 
     create("sourcesJar", Jar::class) {
@@ -103,18 +110,19 @@ tasks {
     create("printCodeGenUsage", JavaExec::class) {
         dependsOn(shadowJar)
         classpath = project.files("./build/libs/$executableName-$version.jar")
-        main = "com.cjbooms.fabrikt.cli.CodeGen"
+        mainClass.set("com.cjbooms.fabrikt.cli.CodeGen")
         args = listOf("--help")
     }
 
     withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
         kotlinOptions {
-            jvmTarget = "11"
+            jvmTarget = JavaVersion.VERSION_17.toString()
         }
     }
 
     withType<Test> {
         useJUnitPlatform()
+        jvmArgs = listOf("--add-opens=java.base/java.lang=ALL-UNNAMED", "--add-opens=java.base/java.util=ALL-UNNAMED")
     }
 }
 

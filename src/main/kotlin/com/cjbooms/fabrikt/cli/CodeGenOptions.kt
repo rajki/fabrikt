@@ -22,7 +22,15 @@ enum class CodeGenerationType(val description: String) {
 }
 
 enum class ClientCodeGenOptionType(private val description: String) {
-    RESILIENCE4J("Generates a fault tolerance service for the client using the following library \"io.github.resilience4j:resilience4j-all:+\"");
+    RESILIENCE4J("Generates a fault tolerance service for the client using the following library \"io.github.resilience4j:resilience4j-all:+\" (only for OkHttp clients)"),
+    SUSPEND_MODIFIER("This option adds the suspend modifier to the generated client functions (only for OpenFeign clients)");
+
+    override fun toString() = "`${super.toString()}` - $description"
+}
+
+enum class ClientCodeGenTargetType(val description: String) {
+    OK_HTTP("Generate OkHttp client."),
+    OPEN_FEIGN("Generate OpenFeign client.");
 
     override fun toString() = "`${super.toString()}` - $description"
 }
@@ -63,5 +71,12 @@ enum class CodeGenTypeOverride(val description: String) {
 enum class ValidationLibrary(val description: String, val annotations: ValidationAnnotations) {
     JAVAX_VALIDATION("Use `javax.validation` annotations in generated model classes (default)", JavaxValidationAnnotations),
     JAKARTA_VALIDATION("Use `jakarta.validation` annotations in generated model classes", JakartaAnnotations);
+    override fun toString() = "`${super.toString()}` - $description"
+}
+
+enum class ExternalReferencesResolutionMode(val description: String) {
+    TARGETED("Generate models only for directly referenced schemas in external API files."),
+    AGGRESSIVE("Referencing any schema in an external API file triggers generation of every external schema in that file.");
+
     override fun toString() = "`${super.toString()}` - $description"
 }

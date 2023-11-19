@@ -107,6 +107,13 @@ class CodeGenArgs {
     var clientOptions: Set<ClientCodeGenOptionType> = emptySet()
 
     @Parameter(
+        names = ["--http-client-target"],
+        description = "Optionally select the target client that you want to be generated. Defaults to OK_HTTP",
+        converter = ClientCodeGenTargetConverter::class
+    )
+    var clientTarget: ClientCodeGenTargetType = ClientCodeGenTargetType.OK_HTTP
+
+    @Parameter(
         names = ["--src-path"],
         description = "Allows the path for generated source files to be overridden. Defaults to `src/main/kotlin`",
         converter = PathConverter::class
@@ -133,6 +140,13 @@ class CodeGenArgs {
         converter = ValidationLibraryOptionConverter::class
     )
     var validationLibrary: ValidationLibrary = ValidationLibrary.JAVAX_VALIDATION
+
+    @Parameter(
+        names = ["--external-ref-resolution"],
+        description = "Specify to which degree referenced schemas from external files are included in model generation. Default: TARGETED",
+        converter = ExternalReferencesResolutionModeConverter::class
+    )
+    var externalRefResolutionMode: ExternalReferencesResolutionMode = ExternalReferencesResolutionMode.TARGETED
 }
 
 class CodeGenerationTypesConverter : IStringConverter<CodeGenerationType> {
@@ -157,12 +171,20 @@ class ClientCodeGenOptionConverter : IStringConverter<ClientCodeGenOptionType> {
         convertToEnumValue(value)
 }
 
+class ClientCodeGenTargetConverter : IStringConverter<ClientCodeGenTargetType> {
+    override fun convert(value: String): ClientCodeGenTargetType = convertToEnumValue(value)
+}
+
 class ValidationLibraryOptionConverter : IStringConverter<ValidationLibrary> {
     override fun convert(value: String): ValidationLibrary = convertToEnumValue(value)
 }
 
 class TypeCodeGenOptionsConverter: IStringConverter<CodeGenTypeOverride> {
     override fun convert(value: String): CodeGenTypeOverride = convertToEnumValue(value)
+}
+
+class ExternalReferencesResolutionModeConverter: IStringConverter<ExternalReferencesResolutionMode> {
+    override fun convert(value: String): ExternalReferencesResolutionMode = convertToEnumValue(value)
 }
 
 class PackageNameValidator : IValueValidator<String> {
