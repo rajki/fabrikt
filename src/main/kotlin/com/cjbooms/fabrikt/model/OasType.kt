@@ -10,7 +10,7 @@ import com.cjbooms.fabrikt.util.KaizenParserExtensions.isTypedAdditionalProperti
 import com.cjbooms.fabrikt.util.KaizenParserExtensions.isUnknownAdditionalProperties
 import com.cjbooms.fabrikt.util.KaizenParserExtensions.isUntypedAdditionalProperties
 import com.cjbooms.fabrikt.util.KaizenParserExtensions.safeType
-import com.reprezen.kaizen.oasparser.model3.Schema
+import io.swagger.v3.oas.models.media.Schema
 import kotlin.reflect.KClass
 import kotlin.reflect.full.isSubclassOf
 
@@ -54,7 +54,7 @@ sealed class OasType(
 
     companion object {
         private const val WILD_CARD_TYPE: String = "wildcard"
-        fun Schema.toOasType(oasKey: String): OasType =
+        fun Schema<*>.toOasType(oasKey: String): OasType =
             values(OasType::class)
                 .filter {
                     it.type == safeType() ||

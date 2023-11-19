@@ -8,7 +8,7 @@ import com.cjbooms.fabrikt.util.KaizenParserExtensions.isInlinedTypedAdditionalP
 import com.cjbooms.fabrikt.util.KaizenParserExtensions.isNotDefined
 import com.cjbooms.fabrikt.util.KaizenParserExtensions.isOneOfSuperInterface
 import com.cjbooms.fabrikt.util.ModelNameRegistry
-import com.reprezen.kaizen.oasparser.model3.Schema
+import io.swagger.v3.oas.models.media.Schema
 import java.math.BigDecimal
 import java.net.URI
 import java.time.LocalDate
@@ -55,7 +55,7 @@ sealed class KotlinTypeInfo(val modelKClass: KClass<*>, val generatedModelClassN
         }
 
     companion object {
-        fun from(schema: Schema, oasKey: String = "", enclosingSchema: EnclosingSchemaInfo? = null): KotlinTypeInfo =
+        fun from(schema: Schema<*>, oasKey: String = "", enclosingSchema: EnclosingSchemaInfo? = null): KotlinTypeInfo =
             when (schema.toOasType(oasKey)) {
                 OasType.Date -> Date
                 OasType.DateTime -> getOverridableDateTimeType()
@@ -74,12 +74,12 @@ sealed class KotlinTypeInfo(val modelKClass: KClass<*>, val generatedModelClassN
                 OasType.Integer -> Integer
                 OasType.Boolean -> Boolean
                 OasType.Array ->
-                    if (schema.itemsSchema.isNotDefined())
+                    if (schema.items.isNotDefined())
                         throw IllegalArgumentException("Property ${schema.name} cannot be parsed to a Schema. Check your input")
-                    else Array(from(schema.itemsSchema, oasKey, enclosingSchema))
+                    else Array(from(schema.items, oasKey, enclosingSchema))
                 OasType.Object -> Object(ModelNameRegistry.getOrRegister(schema, enclosingSchema))
                 OasType.Map ->
-                    Map(from(schema.additionalPropertiesSchema, "", enclosingSchema))
+                    Map(from(schema.additionalProperties, "", enclosingSchema))
                 OasType.TypedObjectAdditionalProperties -> GeneratedTypedAdditionalProperties(
                     ModelNameRegistry.getOrRegister(schema, valueSuffix = schema.isInlinedTypedAdditionalProperties())
                 )
@@ -88,7 +88,7 @@ sealed class KotlinTypeInfo(val modelKClass: KClass<*>, val generatedModelClassN
                 OasType.UnknownAdditionalProperties -> UnknownAdditionalProperties
                 OasType.TypedMapAdditionalProperties ->
                     MapTypeAdditionalProperties(
-                        from(schema.additionalPropertiesSchema, "", enclosingSchema)
+                        from(schema.additionalProperties, "", enclosingSchema)
                     )
                 OasType.Any -> AnyType
                 OasType.OneOfAny ->

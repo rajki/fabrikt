@@ -7,7 +7,7 @@ import com.cjbooms.fabrikt.model.SchemaInfo
 import com.cjbooms.fabrikt.util.KaizenParserExtensions.safeName
 import com.cjbooms.fabrikt.util.NormalisedString.toModelClassName
 import com.reprezen.jsonoverlay.Overlay
-import com.reprezen.kaizen.oasparser.model3.Schema
+import io.swagger.v3.oas.models.media.Schema
 import java.net.URL
 
 /**
@@ -24,7 +24,7 @@ object ModelNameRegistry {
      * [ModelNameRegistry.get].
      */
     private fun register(
-        schema: Schema,
+        schema: Schema<*>,
         enclosingSchema: EnclosingSchemaInfo? = null,
         valueSuffix: Boolean = false,
         schemaInfoName: String? = null,
@@ -46,7 +46,7 @@ object ModelNameRegistry {
         return suggestion
     }
 
-    private fun Schema.toModelClassName(
+    private fun Schema<*>.toModelClassName(
         schemaInfoName: String? = null,
         enclosingClassName: String? = null,
         valueSuffix: Boolean = false,
@@ -69,14 +69,14 @@ object ModelNameRegistry {
         }
 
     private fun resolveTag(
-        schema: Schema,
+        schema: Schema<*>,
         enclosingSchema: EnclosingSchemaInfo? = null,
         valueSuffix: Boolean = false,
         schemaInfoName: String? = null,
     ): String =
         resolveTag(schema, schema.toModelClassName(schemaInfoName, enclosingSchema?.toModelClassName(), valueSuffix))
 
-    private fun resolveTag(schema: Schema, modelClassName: String): String {
+    private fun resolveTag(schema: Schema<*>, modelClassName: String): String {
         val overlay = Overlay.of(schema)
         val uri = URL(overlay.jsonReference)
         return "file:${uri.file}#$modelClassName"
@@ -88,7 +88,7 @@ object ModelNameRegistry {
     }
 
     fun getOrRegister(
-        schema: Schema,
+        schema: Schema<*>,
         enclosingSchema: EnclosingSchemaInfo? = null,
         valueSuffix: Boolean = false,
     ) = this[resolveTag(schema, enclosingSchema, valueSuffix)]
