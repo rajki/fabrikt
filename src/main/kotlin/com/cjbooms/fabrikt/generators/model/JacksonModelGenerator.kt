@@ -46,11 +46,8 @@ import com.cjbooms.fabrikt.util.KaizenParserExtensions.safeName
 import com.cjbooms.fabrikt.util.ModelNameRegistry
 import com.cjbooms.fabrikt.util.NormalisedString.toEnumName
 import com.cjbooms.fabrikt.util.NormalisedString.toModelClassName
+import com.cjbooms.fabrikt.util.YamlUtils
 import com.reprezen.jsonoverlay.Overlay
-import com.reprezen.kaizen.oasparser.OpenApi3Parser
-import com.reprezen.kaizen.oasparser.model3.Discriminator
-import com.reprezen.kaizen.oasparser.model3.OpenApi3
-import com.reprezen.kaizen.oasparser.model3.Schema
 import com.squareup.kotlinpoet.AnnotationSpec
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.CodeBlock
@@ -61,6 +58,9 @@ import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.asTypeName
+import io.swagger.v3.oas.models.OpenAPI
+import io.swagger.v3.oas.models.media.Discriminator
+import io.swagger.v3.oas.models.media.Schema
 import java.io.Serializable
 import java.net.MalformedURLException
 import java.net.URL
@@ -149,8 +149,8 @@ class JacksonModelGenerator(
     fun generate(): Models {
         val models: MutableSet<TypeSpec> = createModels(sourceApi.openApi3, sourceApi.allSchemas)
         externalApiSchemas.forEach { externalReferences ->
-            val api = OpenApi3Parser().parse(URL(externalReferences.key))
-            val schemas = api.schemas.entries.map { (key, schema) -> SchemaInfo(key, schema) }
+            val api = YamlUtils.parseOpenApi(externalReferences.key)
+            val schemas = api.components.schemas.entries.map { (key, schema) -> SchemaInfo(key, schema) }
                 .filterByExternalRefResolutionMode(externalReferences)
             val externalModels = createModels(api, schemas)
             externalModels.forEach { additionalModel ->
@@ -160,7 +160,7 @@ class JacksonModelGenerator(
         return Models(models.map { ModelType(it, packages.base) })
     }
 
-    private fun createModels(api: OpenApi3, schemas: List<SchemaInfo>) = schemas
+    private fun createModels(api: OpenAPI, schemas: List<SchemaInfo>) = schemas
         .filterNot { it.schema.isSimpleType() }
         .filterNot { it.schema.isOneOfPolymorphicTypes() }
         .flatMap {
@@ -183,7 +183,7 @@ class JacksonModelGenerator(
         }.toMutableSet()
 
     private fun buildPrimaryModel(
-        api: OpenApi3,
+        api: OpenAPI,
         schemaInfo: SchemaInfo,
         properties: Collection<PropertyInfo>,
         allSchemas: List<SchemaInfo>,
@@ -195,7 +195,7 @@ class JacksonModelGenerator(
                 modelName,
                 schemaInfo.schema.discriminator,
                 allSchemas,
-                schemaInfo.schema.oneOfSchemas,
+                schemaInfo.schema.oneOf,
                 findOneOfSuperInterface(allSchemas, schemaInfo, options),
             )
 
@@ -250,9 +250,9 @@ class JacksonModelGenerator(
             return emptySet()
         }
         return allSchemas
-            .filter { it.schema.discriminator != null && it.schema.oneOfSchemas.isNotEmpty() }
+            .filter { it.schema.discriminator != null && it.schema.oneOf.isNotEmpty() }
             .mapNotNull { info ->
-                info.schema.discriminator.mappings
+                info.schema.discriminator.mapping
                     .toList()
                     .find { (_, ref) ->
                         ref.endsWith("/${schema.name}")
@@ -273,7 +273,7 @@ class JacksonModelGenerator(
 
     private fun buildInLinedModels(
         topLevelProperties: Collection<PropertyInfo>,
-        enclosingSchema: Schema,
+        enclosingSchema: Schema<*>,
         apiDocUrl: String,
     ): List<TypeSpec> = topLevelProperties.flatMap {
         if (it.schema.isInExternalDocument(apiDocUrl)) {
@@ -329,13 +329,13 @@ class JacksonModelGenerator(
     }
 
     private fun buildInlinedListDefinition(
-        schema: Schema,
+        schema: Schema<*>,
         schemaName: String,
-        enclosingSchema: Schema,
+        enclosingSchema: Schema<*>,
         apiDocUrl: String,
         enclosingSchemaInfoName: String? = null,
     ): Collection<TypeSpec> =
-        schema.itemsSchema.let { items ->
+        schema.items.let { items ->
             val enclosingSchemaInfo = enclosingSchemaInfoName?.toEnclosingSchemaInfo()
                 ?: enclosingSchema.toEnclosingSchemaInfo()
             when {
@@ -365,7 +365,7 @@ class JacksonModelGenerator(
             }
         }
 
-    private fun Schema.captureMissingExternalSchemas(apiDocUrl: String, depth: Int = 0) {
+    private fun Schema<*>.captureMissingExternalSchemas(apiDocUrl: String, depth: Int = 0) {
         nestedSchemas().forEach { schema ->
             val docUrl = schema.getDocumentUrl()
             if (docUrl != apiDocUrl) {
@@ -379,19 +379,19 @@ class JacksonModelGenerator(
         }
     }
 
-    private fun Schema.isInExternalDocument(apiDocUrl: String): Boolean {
+    private fun Schema<*>.isInExternalDocument(apiDocUrl: String): Boolean {
         val docUrl = getDocumentUrl()
         return docUrl != apiDocUrl
     }
 
-    private fun Schema.getDocumentUrl(): String {
+    private fun Schema<*>.getDocumentUrl(): String {
         val positionInfo = Overlay.of(this).positionInfo?.orElse(null)
         return positionInfo?.documentUrl ?: "Not Found"
     }
 
-    private fun Schema.nestedSchemas() =
+    private fun Schema<*>.nestedSchemas() =
         (
-            allOfSchemas + anyOfSchemas + oneOfSchemas + itemsSchema + additionalPropertiesSchema +
+            allOf + anyOf + oneOf + items + additionalProperties +
                 this + this.properties.map { it.value }
             )
             .filterNotNull()
@@ -466,7 +466,7 @@ class JacksonModelGenerator(
             val oneOfInterface = oneOfInterfaces.first()
             val discriminatorProp = oneOfInterface.schema.discriminator?.propertyName
             val mappingCount =
-                oneOfInterface.schema.discriminator?.mappings?.values?.count { it.endsWith("/$modelName") }
+                oneOfInterface.schema.discriminator?.mapping?.values?.count { it.endsWith("/$modelName") }
             if (discriminatorProp != null && mappingCount == 1) {
                 properties.filterNot { it.name == discriminatorProp }
             } else {
@@ -541,7 +541,7 @@ class JacksonModelGenerator(
         modelName: String,
         discriminator: Discriminator,
         allSchemas: List<SchemaInfo>,
-        members: List<Schema>,
+        members: List<Schema<*>>,
         oneOfSuperInterfaces: Set<SchemaInfo>,
     ): TypeSpec {
         val interfaceBuilder = TypeSpec.interfaceBuilder(generatedType(packages.base, modelName))
@@ -553,14 +553,14 @@ class JacksonModelGenerator(
         }
 
         val membersAndMappingsConsistent = members.all { member ->
-            discriminator.mappings.any { (_, ref) -> ref.endsWith("/${member.name}") }
+            discriminator.mapping.any { (_, ref) -> ref.endsWith("/${member.name}") }
         }
 
         if (!membersAndMappingsConsistent) {
             throw IllegalArgumentException("members and mappings are not consistent for oneOf super interface $modelName!")
         }
 
-        val mappings = discriminator.mappings
+        val mappings = discriminator.mapping
             .mapValues { (_, value) ->
                 allSchemas.find { value.endsWith("/${it.name}") }!!
             }
@@ -616,11 +616,11 @@ class JacksonModelGenerator(
 
         val subTypes = allSchemas
             .filter { model ->
-                model.schema.allOfSchemas.any { allOfRef ->
+                model.schema.allOf.any { allOfRef ->
                     allOfRef.name?.toModelClassName() == modelName &&
                         (
                             allOfRef.discriminator == discriminator ||
-                                allOfRef.allOfSchemas.any { it.discriminator == discriminator }
+                                allOfRef.allOf.any { it.discriminator == discriminator }
                             )
                 }
             }

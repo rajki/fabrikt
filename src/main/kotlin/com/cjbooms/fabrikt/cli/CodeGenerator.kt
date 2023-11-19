@@ -6,10 +6,6 @@ import com.cjbooms.fabrikt.cli.CodeGenerationType.HTTP_MODELS
 import com.cjbooms.fabrikt.cli.CodeGenerationType.QUARKUS_REFLECTION_CONFIG
 import com.cjbooms.fabrikt.configurations.Packages
 import com.cjbooms.fabrikt.generators.MutableSettings
-import com.cjbooms.fabrikt.generators.client.OkHttpClientGenerator
-import com.cjbooms.fabrikt.generators.client.OpenFeignInterfaceGenerator
-import com.cjbooms.fabrikt.generators.controller.MicronautControllerInterfaceGenerator
-import com.cjbooms.fabrikt.generators.controller.SpringControllerInterfaceGenerator
 import com.cjbooms.fabrikt.generators.model.JacksonModelGenerator
 import com.cjbooms.fabrikt.generators.model.QuarkusReflectionModelGenerator
 import com.cjbooms.fabrikt.model.GeneratedFile
@@ -45,14 +41,7 @@ class CodeGenerator(
         sourceSet(controllers().files).plus(sourceSet(models().files))
 
     private fun generateClient(): Collection<GeneratedFile> {
-        val clientGenerator = when (MutableSettings.clientTarget()) {
-            ClientCodeGenTargetType.OK_HTTP -> OkHttpClientGenerator(packages, sourceApi, srcPath)
-            ClientCodeGenTargetType.OPEN_FEIGN -> OpenFeignInterfaceGenerator(packages, sourceApi)
-        }
-        val options = MutableSettings.clientOptions()
-        val clientFiles = clientGenerator.generate(options).files
-        val libFiles = clientGenerator.generateLibrary(options)
-        return sourceSet(clientFiles).plus(libFiles).plus(sourceSet(models().files))
+        TODO()
     }
 
     private fun generateQuarkusReflectionResource(): Collection<GeneratedFile> = resourceSet(resources(models()))
@@ -62,28 +51,18 @@ class CodeGenerator(
     private fun resourceSet(resFiles: Collection<ResourceFile>) = setOf(ResourceSourceSet(resFiles, resourcesPath))
 
     private fun models(): Models =
-        JacksonModelGenerator(packages, sourceApi, MutableSettings.modelOptions(), MutableSettings.validationLibrary().annotations, MutableSettings.externalRefResolutionMode()).generate()
+        JacksonModelGenerator(
+            packages,
+            sourceApi,
+            MutableSettings.modelOptions(),
+            MutableSettings.validationLibrary().annotations,
+            MutableSettings.externalRefResolutionMode()
+        ).generate()
 
     private fun resources(models: Models): List<ResourceFile> =
         listOfNotNull(QuarkusReflectionModelGenerator(models, MutableSettings.generationTypes()).generate())
 
     private fun controllers(): KotlinTypes {
-        val generator =
-            when (MutableSettings.controllerTarget()) {
-                ControllerCodeGenTargetType.SPRING -> SpringControllerInterfaceGenerator(
-                    packages,
-                    sourceApi,
-                    MutableSettings.validationLibrary().annotations,
-                    MutableSettings.controllerOptions(),
-                )
-
-                ControllerCodeGenTargetType.MICRONAUT -> MicronautControllerInterfaceGenerator(
-                    packages,
-                    sourceApi,
-                    MutableSettings.validationLibrary().annotations,
-                    MutableSettings.controllerOptions(),
-                )
-            }
-        return generator.generate()
+        TODO()
     }
 }

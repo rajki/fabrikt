@@ -4,15 +4,13 @@ import com.beust.jcommander.ParameterException
 import com.cjbooms.fabrikt.util.KaizenParserExtensions.isNotDefined
 import com.cjbooms.fabrikt.util.YamlUtils
 import com.cjbooms.fabrikt.validation.ValidationError
-import com.reprezen.kaizen.oasparser.model3.OpenApi3
-import com.reprezen.kaizen.oasparser.model3.Schema
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.media.Schema
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.logging.Logger
 
-data class SchemaInfo(val name: String, val schema: Schema<Any>) {
+data class SchemaInfo(val name: String, val schema: Schema<*>) {
     val typeInfo: KotlinTypeInfo = KotlinTypeInfo.from(schema, name)
 }
 
@@ -65,11 +63,11 @@ data class SourceApi(
             }
         }
 
-        return api.schemas.map { it.value.properties }.flatMap { it.entries }
+        return api.components.schemas.map { it.value.properties }.flatMap { it.entries }
             .fold(schemaErrors) { lst, entry ->
                 val name = entry.key
                 val schema = entry.value
-                if (schema.type == OasType.Array.type && schema.itemsSchema.isNotDefined()) {
+                if (schema.type == OasType.Array.type && schema.items.isNotDefined()) {
                     lst + listOf(ValidationError("Array type '$name' cannot be parsed to a Schema. Check your input"))
                 } else if (schema.isNotDefined()) {
                     lst + listOf(ValidationError("Property '$name' cannot be parsed to a Schema. Check your input"))
@@ -98,10 +96,10 @@ data class EnclosingSchemaInfoName(val name: String) : EnclosingSchemaInfo {
     override val type = EnclosingSchemaInfoType.NAME
 }
 
-data class EnclosingSchemaInfoOasModel(val schema: Schema) : EnclosingSchemaInfo {
+data class EnclosingSchemaInfoOasModel(val schema: Schema<*>) : EnclosingSchemaInfo {
     override val type = EnclosingSchemaInfoType.OAS_MODEL
 }
 
-fun Schema.toEnclosingSchemaInfo() = EnclosingSchemaInfoOasModel(this)
+fun Schema<*>.toEnclosingSchemaInfo() = EnclosingSchemaInfoOasModel(this)
 
 fun String.toEnclosingSchemaInfo() = EnclosingSchemaInfoName(this)
